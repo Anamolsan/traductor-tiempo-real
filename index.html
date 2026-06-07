@@ -325,13 +325,14 @@
   async function translate(text, targetEl) {
     if (!text || !targetEl || !targetEl.isConnected) return;
     try {
-      const url = 'https://api.mymemory.translated.net/get?q='
-        + encodeURIComponent(text)
-        + '&langpair=en|es';
+      const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q='
+        + encodeURIComponent(text);
       const res = await fetch(url);
       const data = await res.json();
-      if (data.responseStatus === 200 && targetEl.isConnected) {
-        targetEl.textContent = data.responseData.translatedText;
+      if (targetEl.isConnected) {
+        // Response is nested array: [[["translated","original",...],...],...]
+        const translated = data[0].map(chunk => chunk[0]).filter(Boolean).join('');
+        targetEl.textContent = translated;
         scrollBoth();
       }
     } catch (_) {
