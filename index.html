@@ -341,7 +341,14 @@
 
   // ── Speech recognition ────────────────────────────────────────────────────
 
+  let restarting = false;
+
   function buildRecognition() {
+    // Destroy previous instance cleanly before creating a new one
+    if (recognition) {
+      try { recognition.onend = null; recognition.onerror = null; recognition.abort(); } catch (_) {}
+    }
+
     recognition = new SpeechRecognition();
     recognition.lang = 'en-US';
     recognition.interimResults = true;
@@ -363,20 +370,28 @@
     };
 
     recognition.onerror = (e) => {
-      if (e.error === 'no-speech') return;
       if (e.error === 'not-allowed') {
         showError('Permiso de micrófono denegado. Habilitalo en la configuración del navegador.');
         stop();
       }
+      // All other errors (no-speech, network, aborted): let onend handle restart
     };
 
-    // Auto-restart to keep listening continuously
+    // onend always fires after stop/error/silence — rebuild and restart immediately
     recognition.onend = () => {
-      if (isListening) {
-        try { recognition.start(); } catch (_) {}
-      } else {
-        setUI(false);
-      }
+      if (!isListening || restarting) return;
+      restarting = true;
+      // Small delay prevents "already started" race condition
+      setTimeout(() => {
+        restarting = false;
+        if (isListening) {
+          buildRecognition();
+          try { recognition.start(); } catch (_) {
+            // If it still fails, retry once more after 300ms
+            setTimeout(() => { if (isListening) { buildRecognition(); try { recognition.start(); } catch(_) {} } }, 300);
+          }
+        }
+      }, 150);
     };
   }
 
@@ -385,20 +400,26 @@
       showError('Tu navegador no soporta la Web Speech API. Usá Google Chrome o Microsoft Edge.');
       return;
     }
+    isListening = true;
+    restarting = false;
+    setUI(true);
     buildRecognition();
     try {
       recognition.start();
-      isListening = true;
-      setUI(true);
     } catch (e) {
       showError('No se pudo iniciar el micrófono: ' + e.message);
+      isListening = false;
+      setUI(false);
     }
   }
 
   function stop() {
     isListening = false;
+    restarting = false;
     clearInterim();
-    if (recognition) try { recognition.stop(); } catch (_) {}
+    if (recognition) {
+      try { recognition.onend = null; recognition.abort(); } catch (_) {}
+    }
     setUI(false);
   }
 
