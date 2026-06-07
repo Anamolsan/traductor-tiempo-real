@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Traductor en Tiempo Real</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0d0d0d;
+      color: #f0f0f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 0.9rem 1.5rem;
+      border-bottom: 1px solid #1e1e1e;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .badge {
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: #1a1a1a;
+      color: #666;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .badge.live {
+      background: #0d2010;
+      color: #4ade80;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+    }
+
+    .divider {
+      width: 1px;
+      background: #1e1e1e;
+      grid-row: 1;
+      grid-column: 1 / span 2;
+      display: none;
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-right: 1px solid #1e1e1e;
+    }
+    .panel:last-child { border-right: none; }
+
+    .panel-header {
+      padding: 0.6rem 1.5rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #555;
+      border-bottom: 1px solid #1a1a1a;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .transcript {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem;
+      font-size: 1.05rem;
+      line-height: 1.75;
+    }
+
+    .segment {
+      margin-bottom: 0.5rem;
+    }
+
+    .segment.final {
+      color: #eeeeee;
+    }
+
+    .segment.interim {
+      color: #555;
+    }
+
+    .translation .segment.final {
+      color: #4ade80;
+    }
+
+    .translation .segment.interim {
+      color: #1e4d2e;
+    }
+
+    .placeholder {
+      color: #333;
+      font-size: 0.9rem;
+      margin-top: 2rem;
+      text-align: center;
+    }
+
+    .error-bar {
+      background: #1a0808;
+      color: #f87171;
+      padding: 0.65rem 1.5rem;
+      font-size: 0.82rem;
+      border-top: 1px solid #2a1010;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    footer {
+      padding: 0.9rem 1.5rem;
+      border-top: 1px solid #1e1e1e;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.9rem;
+      flex-shrink: 0;
+    }
+
+    .mic-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #2a2a2a;
+      flex-shrink: 0;
+    }
+    .mic-dot.active {
+      background: #ef4444;
+      animation: blink 1.2s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    button {
+      padding: 0.55rem 1.4rem;
+      border-radius: 99px;
+      border: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    #startBtn {
+      background: #4ade80;
+      color: #050e09;
+      min-width: 90px;
+    }
+    #startBtn:hover { background: #22c55e; }
+    #startBtn.active {
+      background: #ef4444;
+      color: #fff;
+    }
+    #startBtn.active:hover { background: #dc2626; }
+
+    #clearBtn {
+      background: #1a1a1a;
+      color: #666;
+    }
+    #clearBtn:hover { background: #222; color: #999; }
+
+    .status-text {
+      font-size: 0.78rem;
+      color: #3a3a3a;
+      flex: 1;
+      text-align: right;
+    }
+
+    /* Scrollbar */
+    .transcript::-webkit-scrollbar { width: 3px; }
+    .transcript::-webkit-scrollbar-track { background: transparent; }
+    .transcript::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Traductor en Tiempo Real &nbsp;🎙</h1>
+  <span class="badge" id="badge">Listo</span>
+</header>
+
+<main>
+  <div class="panel" id="origPanel">
+    <div class="panel-header">🇺🇸 &nbsp;Inglés — original</div>
+    <div class="transcript" id="origTranscript">
+      <div class="placeholder" id="origPlaceholder">Presioná <strong>Iniciar</strong> y hablá cerca del micrófono</div>
+    </div>
+  </div>
+
+  <div class="panel translation" id="transPanel">
+    <div class="panel-header">🇪🇸 &nbsp;Español — traducción</div>
+    <div class="transcript" id="transTranscript">
+      <div class="placeholder" id="transPlaceholder">La traducción aparecerá acá</div>
+    </div>
+  </div>
+</main>
+
+<div class="error-bar" id="errorBar"></div>
+
+<footer>
+  <span class="mic-dot" id="micDot"></span>
+  <button id="startBtn" onclick="toggle()">Iniciar</button>
+  <button id="clearBtn" onclick="clearAll()">Limpiar</button>
+  <span class="status-text" id="statusText">Chrome o Edge recomendado</span>
+</footer>
+
+<script>
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isListening = false;
+  let debounceTimer = null;
+
+  // Current interim DOM nodes
+  let interimOrig = null;
+  let interimTrans = null;
+
+  // ── UI helpers ────────────────────────────────────────────────────────────
+
+  function setUI(listening) {
+    const btn = document.getElementById('startBtn');
+    const dot = document.getElementById('micDot');
+    const badge = document.getElementById('badge');
+    const status = document.getElementById('statusText');
+
+    btn.textContent = listening ? 'Detener' : 'Iniciar';
+    btn.classList.toggle('active', listening);
+    dot.classList.toggle('active', listening);
+    badge.textContent = listening ? 'En vivo' : 'Listo';
+    badge.classList.toggle('live', listening);
+    status.textContent = listening ? 'Escuchando inglés…' : 'Chrome o Edge recomendado';
+  }
+
+  function showError(msg) {
+    const bar = document.getElementById('errorBar');
+    bar.textContent = msg;
+    bar.style.display = 'block';
+  }
+
+  function hidePlaceholders() {
+    document.getElementById('origPlaceholder').style.display = 'none';
+    document.getElementById('transPlaceholder').style.display = 'none';
+  }
+
+  function scrollBoth() {
+    const o = document.getElementById('origTranscript');
+    const t = document.getElementById('transTranscript');
+    o.scrollTop = o.scrollHeight;
+    t.scrollTop = t.scrollHeight;
+  }
+
+  // ── Segment management ────────────────────────────────────────────────────
+
+  function appendFinal(origText) {
+    clearInterim();
+    if (!origText.trim()) return;
+
+    hidePlaceholders();
+
+    const oEl = document.createElement('div');
+    oEl.className = 'segment final';
+    oEl.textContent = origText.trim();
+    document.getElementById('origTranscript').appendChild(oEl);
+
+    const tEl = document.createElement('div');
+    tEl.className = 'segment final';
+    tEl.textContent = '…';
+    document.getElementById('transTranscript').appendChild(tEl);
+
+    scrollBoth();
+    translate(origText.trim(), tEl);
+  }
+
+  function updateInterim(text) {
+    if (!text.trim()) return;
+    hidePlaceholders();
+
+    if (!interimOrig) {
+      interimOrig = document.createElement('div');
+      interimOrig.className = 'segment interim';
+      document.getElementById('origTranscript').appendChild(interimOrig);
+    }
+    if (!interimTrans) {
+      interimTrans = document.createElement('div');
+      interimTrans.className = 'segment interim';
+      document.getElementById('transTranscript').appendChild(interimTrans);
+    }
+
+    interimOrig.textContent = text.trim();
+    scrollBoth();
+
+    // Debounce interim translation to avoid hammering the API
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => translate(text.trim(), interimTrans), 700);
+  }
+
+  function clearInterim() {
+    clearTimeout(debounceTimer);
+    if (interimOrig) { interimOrig.remove(); interimOrig = null; }
+    if (interimTrans) { interimTrans.remove(); interimTrans = null; }
+  }
+
+  // ── Translation ───────────────────────────────────────────────────────────
+
+  async function translate(text, targetEl) {
+    if (!text || !targetEl || !targetEl.isConnected) return;
+    try {
+      const url = 'https://api.mymemory.translated.net/get?q='
+        + encodeURIComponent(text)
+        + '&langpair=en|es';
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.responseStatus === 200 && targetEl.isConnected) {
+        targetEl.textContent = data.responseData.translatedText;
+        scrollBoth();
+      }
+    } catch (_) {
+      // silent — translation is best-effort
+    }
+  }
+
+  // ── Speech recognition ────────────────────────────────────────────────────
+
+  function buildRecognition() {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (e) => {
+      let interim = '';
+      let final = '';
+
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) final += r[0].transcript + ' ';
+        else interim += r[0].transcript;
+      }
+
+      if (final.trim()) appendFinal(final);
+      else if (interim) updateInterim(interim);
+    };
+
+    recognition.onerror = (e) => {
+      if (e.error === 'no-speech') return;
+      if (e.error === 'not-allowed') {
+        showError('Permiso de micrófono denegado. Habilitalo en la configuración del navegador.');
+        stop();
+      }
+    };
+
+    // Auto-restart to keep listening continuously
+    recognition.onend = () => {
+      if (isListening) {
+        try { recognition.start(); } catch (_) {}
+      } else {
+        setUI(false);
+      }
+    };
+  }
+
+  function start() {
+    if (!SpeechRecognition) {
+      showError('Tu navegador no soporta la Web Speech API. Usá Google Chrome o Microsoft Edge.');
+      return;
+    }
+    buildRecognition();
+    try {
+      recognition.start();
+      isListening = true;
+      setUI(true);
+    } catch (e) {
+      showError('No se pudo iniciar el micrófono: ' + e.message);
+    }
+  }
+
+  function stop() {
+    isListening = false;
+    clearInterim();
+    if (recognition) try { recognition.stop(); } catch (_) {}
+    setUI(false);
+  }
+
+  function toggle() {
+    isListening ? stop() : start();
+  }
+
+  function clearAll() {
+    stop();
+    document.getElementById('origTranscript').innerHTML =
+      '<div class="placeholder" id="origPlaceholder">Presioná <strong>Iniciar</strong> y hablá cerca del micrófono</div>';
+    document.getElementById('transTranscript').innerHTML =
+      '<div class="placeholder" id="transPlaceholder">La traducción aparecerá acá</div>';
+    document.getElementById('errorBar').style.display = 'none';
+  }
+</script>
+</body>
+</html>
